@@ -13,6 +13,7 @@ def getRunningLayer(nodes) -> tuple[set, set, list]:
     # 搜索输出节点集合
     outNodeSet = set()
     for node in nodes:
+        node.is_bug = False
         if node.is_output_node:
             outNodeSet.add(node)
 

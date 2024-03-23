@@ -1,9 +1,10 @@
 import bpy
 import mathutils
 import inspect
+import types
 import typing
 from .NodeBase import OmniNode
-from .NodeSocket import OmniNodeSocketScene, OmniNodeSocketAny
+from .NodeSocket import OmniNodeSocketText, OmniNodeSocketScene, OmniNodeSocketAny
 from bpy.types import Node
 from bpy.types import NodeSocketFloat, NodeSocketVector, NodeSocketColor, NodeSocketImage, NodeSocketBool, NodeSocketInt, NodeSocketObject, NodeSocketString, NodeSocketRotation, NodeSocketCollection
 
@@ -11,7 +12,7 @@ from bpy.types import NodeSocketFloat, NodeSocketVector, NodeSocketColor, NodeSo
 # 函数变量标签类型：blenderSocket类型
 cls_dic = {
     # 签名中没写类型的全是_empty类
-    inspect._empty: NodeSocketFloat,
+    inspect._empty: OmniNodeSocketAny,
     # blender类转化
     NodeSocketFloat: NodeSocketFloat,
     NodeSocketVector: NodeSocketVector,
@@ -37,6 +38,7 @@ cls_dic = {
     # Omni自定义接口
     bpy.types.Scene: OmniNodeSocketScene,
     typing.Any: OmniNodeSocketAny,
+    bpy.types.Text: OmniNodeSocketText,
 
 }
 
@@ -48,12 +50,14 @@ def meta(**metadata):
         a={"name":"111","type":"","identifier":"}
         目前只支持name修改,identifier不可修改
     2.  对于本身的一些设置,一般支持
-        omni_description
-        bl_label
-        base_color
-        is_output_node
+        omni_description:str
+        bl_label:str
+        base_color:tuple[float,float,float]
+        is_output_node:bool
+        _OUTPUT_NAME:list[str]
     3.  由于使用了函数签名来生成，签名无法设置多输出的名字
-        目前使用默认_OUTPUT+数字来生成名字，并且不可更改
+        目前使用默认_OUTPUT+数字来生成identifier
+        名称想要修改可以使用_OUTPUT_NAME这个列表,他将会顺序指定输出的名字
     '''
     def decorator(func):
         func.__meta = metadata
@@ -72,25 +76,64 @@ def CheckMetaInfo(func) -> tuple[dict, dict[dict], dict[dict]]:
     NodeInfo["is_output_node"] = False
     NodeInfo["base_color"] = (0.5, 0.5, 0)
     NodeInfo["omni_description"] = ""
+    NodeInfo["_OUTPUT_NAME"] = ["输出"]
     NodeInfo.update(func.__meta)
 
-    # 节点输入接口信息
-    params = inspect.signature(func).parameters
+    # 节点输入输出接口信息
+    signature = inspect.signature(func)
+    params = signature.parameters
+    outputs = signature.return_annotation
+
+    # 解算输入输出信息
+    # 内容类型inspect.Parameter，名字是.name，类型是.annotation
+    inputParamsPair: list[inspect.Parameter] = []
+    outputParamsType: list[type] = []
+
     inputParamsPair = list(params.values())
-    #   #没有meta的默认信息
-    index = 0
-    for i in inputParamsPair:
-        dic = {
-            "type": cls_dic.get(i.annotation, NodeSocketFloat),
-            "name": i.name,
-            "identifier": i.name
-        }
-        SocketInMetaDict[i.name] = dic
-        index += 1
-    if hasattr(func, "__meta"):
-        for i in SocketInMetaDict.keys():
-            if i in func.__meta:
-                SocketInMetaDict[i].update(func.__meta[i])
+    if type(outputs) == types.GenericAlias:
+        tup = typing.get_args(outputs)
+        outputParamsType = list(tup)
+    elif type(outputs) == None:
+        outputParamsType = []
+    else:
+        outputParamsType = [outputs,]
+
+    #   #没有meta的默认input信息
+    if len(inputParamsPair) != 0:
+        index = 0
+        for i in inputParamsPair:
+            identifier = i.name
+            dic = {
+                "type": cls_dic.get(i.annotation, OmniNodeSocketAny).__name__,
+                "name": i.name,
+                "identifier": identifier
+            }
+            SocketInMetaDict[identifier] = dic
+            index += 1
+        if hasattr(func, "__meta"):
+            for i in SocketInMetaDict.keys():
+                if i in func.__meta:
+                    SocketInMetaDict[i].update(func.__meta[i])
+    #   #没有meta的默认output信息
+    if len(outputParamsType) != 0:
+        index = 0
+        for i in outputParamsType:
+            try:
+                name = NodeInfo["_OUTPUT_NAME"][index]
+            except:
+                name = "输出"
+            identifier = "_OUTPUT"+str(index)
+            dic = {
+                "type": cls_dic.get(i, OmniNodeSocketAny).__name__,
+                "name": name,
+                "identifier": identifier
+            }
+            SocketOutMetaDict[identifier] = dic
+            index += 1
+        if hasattr(func, "__meta"):
+            for i in SocketOutMetaDict.keys():
+                if i in func.__meta:
+                    SocketOutMetaDict[i].update(func.__meta[i])
 
     return NodeInfo, SocketInMetaDict, SocketOutMetaDict
 
@@ -116,29 +159,12 @@ def CreateNodeClass(func) -> OmniNode:
 
             # 生成输入
             for i in SocketInMetaDict.keys():
-                tmp = SocketInMetaDict[i].get("type")
-                if tmp and type(tmp) != str:
-                    SocketInMetaDict[i]["type"] = tmp.__name__
                 self.inputs.new(**SocketInMetaDict[i])
-
             # 生成输出
-            returns = inspect.signature(func).return_annotation
-            out_params = []
-            index = 0  # 生成的socket序号
-            if type(returns) == typing.GenericAlias:
-                # 多输出情况
-                for i in returns.__args__:
-                    out_params.append(i)
-            else:
-                out_params.append(returns)
-            if len(out_params):
-                for i in out_params:
-                    self.outputs.new(type=cls_dic.get(i, NodeSocketFloat).__name__,
-                                     name="Output",
-                                     identifier="_OUTPUT"+str(index))
-                    index += 1
-
-            self.updateSocket2PersonalProps(self)  # 将新注册socket同步到内部变量
+            for i in SocketOutMetaDict.keys():
+                self.outputs.new(**SocketOutMetaDict[i])
+            # 将新注册socket同步到内部变量
+            self.updateSocket2PersonalProps(self)
 
         def process(self):
             self.is_bug = False

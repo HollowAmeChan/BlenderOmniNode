@@ -54,6 +54,7 @@ def colorInput(color: mathutils.Color) -> mathutils.Color:
       bl_label="设置纯色图像",
       base_color=_COLOR.colorCat["SetBlenderProp"],
       is_output_node=True,
+      img={"name": "图像输入"},
       )
 def imgSetPureColor(img: bpy.types.Image, color: mathutils.Color) -> bpy.types.Image:
     length = len(img.pixels)//4

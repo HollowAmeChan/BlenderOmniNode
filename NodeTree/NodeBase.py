@@ -62,19 +62,6 @@ class OmniNodeTree(NodeTree):  # 节点树
         因此树的更新回调里面必须要出发全体更新参数到内部变量
 
         '''
-        # if self.get("late_node_list") == None:  # node tree 没有init所以就只能在这写了
-        #     self["late_node_list"] = list()  # 自定义的类型不支持集合，很恶心，只能用list了
-
-        # newList = [node.name for node in self.nodes]
-        # oldList = self.get("late_node_list")
-        # change = set(newList)-set(oldList)
-        # change = list(change)
-        # self["late_node_list"] = newList
-
-        # if not change == None:
-        #     for nodename in change:
-        #         # TODO:有点屎味儿，因为新建会触发两遍，删掉其中一个订阅会不完整
-        #         self.nodes[nodename].updateSubscribe()
 
         for node in self.nodes:  # 总进行所有节点的接口值更新到内部变量
             node.updateSocketDefaultValue2PersonalProps()
@@ -90,8 +77,8 @@ def setBugNode(node, context):
     node.updateColor()
 
 
-def ProcessBoolSwitchUpdate(node, context):
-    node.inputs["_BOOL"].hide = 1-node.process_bool_switch  # 先触发回调再更新
+def ProcessBoolToggleUpdate(node, context):
+    node.inputs["_BOOL"].hide = 1-node.process_bool_toggle  # 先触发回调再更新
     return
 
 
@@ -104,8 +91,9 @@ class OmniNode:
     is_bug: bpy.props.BoolProperty(
         name="是否bug", default=False, update=setBugNode)  # type: ignore
     debug: bpy.props.BoolProperty(name="调试", default=False)  # type: ignore
+    advanced: bpy.props.BoolProperty(name="高级", default=False)  # type: ignore
 
-    default_width: bpy.props.FloatProperty(default=180)  # type: ignore
+    default_width: bpy.props.FloatProperty(default=250)  # type: ignore
     default_heigh: bpy.props.FloatProperty(default=100)  # type: ignore
 
     is_output_node: bpy.props.BoolProperty(
@@ -114,10 +102,12 @@ class OmniNode:
         name="作为输出节点的高亮颜色", size=3, subtype="COLOR", default=(0.4, 0, 0))  # type: ignore
     base_color: bpy.props.FloatVectorProperty(
         name="默认类型", size=3, subtype="COLOR", default=(0.191, 0.061, 0.012))  # type: ignore
+    omni_description_toggle: bpy.props.BoolProperty(
+        name="是否开启显示功能描述", default=False)  # type: ignore
     omni_description: bpy.props.StringProperty(
         name="OMNI节点描述", default="没有使用描述")  # type: ignore
-    process_bool_switch: bpy.props.BoolProperty(
-        name="是否公开bool逻辑接口", default=False, update=ProcessBoolSwitchUpdate)  # type: ignore
+    process_bool_toggle: bpy.props.BoolProperty(
+        name="是否公开bool逻辑接口", default=False, update=ProcessBoolToggleUpdate)  # type: ignore
 
 
 # ---------------------------------内部核心相关-------------------------------
@@ -198,20 +188,16 @@ class OmniNode:
     def draw_buttons(self, context, layout):
         '''绘制节点按钮'''
         # 绘制小工具栏
-        main_row = layout.row(align=False)  # 常用按钮显示
+        main_row = layout.row(align=False)
 
         row_L = main_row.row(align=True)  # 左侧按钮
         row_L.alignment = 'LEFT'
         if self.is_bug:
             row_L.label(icon="ERROR",)
         row_L.prop(self, "debug", text="", toggle=True, icon="FILE_SCRIPT")
-
-        if context.space_data.node_tree.is_auto_update:
-            row_L.prop(context.space_data.node_tree,
-                       "is_auto_update", text="", icon="DECORATE_LINKED")
-        else:
-            row_L.prop(context.space_data.node_tree,
-                       "is_auto_update", text="", icon="UNLINKED")
+        row_L.prop(self, "advanced", text="", toggle=True, icon="MODIFIER")
+        row_L.prop(self, "omni_description_toggle",
+                   text="", toggle=True, icon="OUTLINER_DATA_LIGHT")
 
         row_C = main_row.row(align=True)  # 中心按钮
         SetDefaultSize = row_C.operator(
@@ -223,28 +209,64 @@ class OmniNode:
 
         row_R = main_row.row(align=True)  # 右侧按钮
         row_R.alignment = 'RIGHT'
-        row_R.prop(self, "process_bool_switch",
-                   text="", icon="OUTLINER_DATA_LIGHT")
+        # 是否是自动更新的
+        if context.space_data.node_tree.is_auto_update:
+            row_R.prop(context.space_data.node_tree,
+                       "is_auto_update", text="", icon="DECORATE_LINKED")
+        else:
+            row_R.prop(context.space_data.node_tree,
+                       "is_auto_update", text="", icon="UNLINKED")
+
         row_R.prop(self, "is_output_node", text="", icon="ANIM_DATA")
         row_R.operator(
-            NodeBaseOps.LayerRunning.bl_idname, text="", icon="FILE_REFRESH")
+            NodeBaseOps.LayerRunning.bl_idname, text="", icon="FILE_REFRESH")\
 
-        if self.debug:  # debug显示
+        # 绘制高级工具栏
+        if self.advanced:
+            layout.prop(self, "process_bool_toggle",
+                        text="逻辑socket", icon="DECORATE_ANIMATE")
+
+        # debug显示
+        if self.debug:
+
             # bug描述
             layout.label(text=f"bug类型:{self.bug_text}")
             # 内部prop详情
-            layout.label(text="<<<<<<<<<<personalInputProps<<<<<<<<<<")
-            layout.label(text=str(self.get("personalInputProps").to_dict()))
-            layout.label(text=">>>>>>>>>>personalOutputProps>>>>>>>>>")
-            layout.label(text=str(self.get("personalOutputProps").to_dict()))
-            # OMNI节点描述
+            inputsInfo = self.get("personalInputProps").to_dict()
+            outputInfo = self.get("personalOutputProps").to_dict()
+            # 输入表
+            col = layout.column(align=True)
+            grid = col.grid_flow(columns=3, align=True)
+
+            grid.label(text="[标识符]")
+            for key in inputsInfo.keys():
+                grid.label(text=str(key))
+            grid.label(text="[值]")
+            for value in inputsInfo.values():
+                grid.label(text=str(value))
+            grid.label(text="[类型]")
+            for value in inputsInfo.values():
+                grid.label(text=type(value).__name__)
+            # 输出表
+            layout.label(text="")
+            col = layout.column(align=True)
+            grid = col.grid_flow(columns=3, align=True)
+
+            grid.label(text="[标识符]")
+            for key in outputInfo.keys():
+                grid.label(text=str(key))
+            grid.label(text="[值]")
+            for value in outputInfo.values():
+                grid.label(text=str(value))
+            grid.label(text="[类型]")
+            for value in outputInfo.values():
+                grid.label(text=type(value).__name__)
+
+        # OMNI节点描述
+        if self.omni_description_toggle:
             lines = self.omni_description.splitlines()
             for line in lines:
                 layout.label(text=line)
-
-    def free(self):
-        # 被删除时调用
-        bpy.msgbus.clear_by_owner(id(self))
 
 
 cls = [OmniNodeTree]
