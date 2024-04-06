@@ -1,5 +1,10 @@
 # BlenderOmniNode
 Try to node any script (not mvc for now)
+
+__Please prioritize the download of the release version to get the latest version under development__ (the source code contains virtual environments as well as test functions, so it is larger)
+
+Sorry for not being able to update the organized code in time, it may be a long interval. (I am learning while developing, there may be relatively large changes)
+
 # 使用方法
 
 找到`NodeTree\Function`文件夹，新建你的函数文件
@@ -11,3 +16,7 @@ Try to node any script (not mvc for now)
 所有的规范可以参考自带的一些写法，可以使用meta信息对函数生成的节点进行一定程度的修饰
 
 所有的节点类都是由函数自动生成的（暂时但希望一直是这样）
+
+__请优先下载发布版，获取正在开发的最新版本__（源码包含虚拟环境以及测试功能，所以比较大）
+
+抱歉不能及时更新整理好的代码，可能会间隔很长时间。（本人一边学习一边开发，可能会有比较大的变动）
