@@ -5,7 +5,7 @@ __Please prioritize the download of the release version to get the latest versio
 
 Sorry for not being able to update the organized code in time, it may be a long interval. (I am learning while developing, there may be relatively large changes)
 
-__Some python module dependencies may not be included__ (pyopengl,pyglfw,pyimgui,pyglm are used)
+__Some python module dependencies may not be included__ (PyGLM)
 
 You can install them manually using pip, or use the blender plugin blender_pip to install and manage them.
 
@@ -27,7 +27,7 @@ __请优先下载发布版，获取正在开发的最新版本__（源码包含�
 
 抱歉不能及时更新整理好的代码，可能会间隔很长时间。（本人一边学习一边开发，可能会有比较大的变动）
 
-__一些python模块依赖可能没有包含__（使用了pyopengl,pyglfw,pyimgui,pyglm）
+__一些python模块依赖可能没有包含__（使用了PyGLM）
 
 可以手动使用pip安装，或者使用blender插件blender_pip安装管理
 
