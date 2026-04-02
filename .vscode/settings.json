@@ -1,0 +1,8 @@
+{
+    //文件夹忽略文件
+    "files.exclude": {
+        // ".gitignore": true,
+        // "**/LICENSE": true,
+        "**/*__pycache__": true, //所有文件夹下的__pycache__文件夹
+    },
+}
