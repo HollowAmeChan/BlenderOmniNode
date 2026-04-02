@@ -9,9 +9,6 @@ class OmniNodeSocketScene(NodeSocket):
     default_value: bpy.props.PointerProperty(
         type=bpy.types.Scene, description="场景")  # type: ignore
 
-    def __init__(self):
-        super().__init__()
-
     def draw(self, context, layout, node, text):
         if self.is_output or self.is_linked:
             layout.label(text=text)
@@ -22,16 +19,12 @@ class OmniNodeSocketScene(NodeSocket):
     def draw_color_simple(cls):
         return (1.0, 0.4, 0.216, 0.5)
 
-
 class OmniNodeSocketText(NodeSocket):
     bl_label = "Omni节点文本文件Socket"
     bl_idname = 'OmniNodeSocketText'
 
     default_value: bpy.props.PointerProperty(
         type=bpy.types.Text, description="场景")  # type: ignore
-
-    def __init__(self):
-        super().__init__()
 
     def draw(self, context, layout, node, text):
         if self.is_output or self.is_linked:
@@ -51,9 +44,6 @@ class OmniNodeSocketAny(NodeSocket):
     # 无用
 
     default_value: bpy.props.FloatProperty()  # type: ignore
-
-    def __init__(self):
-        super().__init__()
 
     def draw(self, context, layout, node, text):
         layout.label(text=text)

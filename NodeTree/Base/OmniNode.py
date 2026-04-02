@@ -87,6 +87,8 @@ class OmniNode(Node):
             return  # 多返回
 
     def process(self):
+        print("PROCESS RUN:", self.name)
+        print("BOOL:", self["fatherTree"].pool[self.name].inputs.get("_BOOL"))
         self.is_bug = False
         self.property_unset("bug_text")  # 首先清空bug
         return

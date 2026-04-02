@@ -63,6 +63,35 @@ def meta(**metadata):
         return func
     return decorator
 
+def resolve_output_types(annotation):
+    # 无返回
+    if annotation is inspect._empty or annotation is None:
+        return []
+
+    # Python 3.9+ tuple[]
+    if isinstance(annotation, types.GenericAlias):
+        return list(typing.get_args(annotation))
+
+    # typing.Tuple / Union / Optional
+    origin = typing.get_origin(annotation)
+    if origin is tuple:
+        return list(typing.get_args(annotation))
+
+    if origin is typing.Union:
+        # Optional[T] -> (T, NoneType)
+        args = [a for a in typing.get_args(annotation) if a is not type(None)]
+        return args if args else [OmniNodeSocketAny]
+
+    # 单返回
+    return [annotation]
+
+def get_socket_type_name(socket_cls):
+    # 自定义 socket（有 bl_idname）
+    if hasattr(socket_cls, "bl_idname"):
+        return socket_cls.bl_idname
+
+    # Blender 内置 socket（用类名）（没有 bl_idname）
+    return socket_cls.__name__
 
 def CheckMetaInfo(func) -> tuple[dict, dict[dict], dict[dict]]:
     NodeInfo = {}
@@ -89,13 +118,7 @@ def CheckMetaInfo(func) -> tuple[dict, dict[dict], dict[dict]]:
     outputParamsType: list[type] = []
 
     inputParamsPair = list(params.values())
-    if type(outputs) == types.GenericAlias:
-        tup = typing.get_args(outputs)
-        outputParamsType = list(tup)
-    elif type(outputs) == None:
-        outputParamsType = []
-    else:
-        outputParamsType = [outputs,]
+    outputParamsType = resolve_output_types(outputs)
 
     #   #没有meta的默认input信息
     if len(inputParamsPair) != 0:
@@ -103,7 +126,7 @@ def CheckMetaInfo(func) -> tuple[dict, dict[dict], dict[dict]]:
         for i in inputParamsPair:
             identifier = i.name
             dic = {
-                "type": cls_dic.get(i.annotation, OmniNodeSocketAny).__name__,
+                "type": get_socket_type_name(cls_dic.get(i.annotation, OmniNodeSocketAny)),
                 "name": i.name,
                 "identifier": identifier
             }
@@ -123,7 +146,7 @@ def CheckMetaInfo(func) -> tuple[dict, dict[dict], dict[dict]]:
                 name = "输出"
             identifier = "_OUTPUT"+str(index)
             dic = {
-                "type": cls_dic.get(i, OmniNodeSocketAny).__name__,
+                "type": get_socket_type_name(cls_dic.get(i, OmniNodeSocketAny)),
                 "name": name,
                 "identifier": identifier
             }

@@ -300,8 +300,8 @@ class GlslCodeRenderNode(OmniNode):
         vertices = inputs["vertices"]
         indices = inputs["indices"]
 
-        vertex_shader = inputs["vertex_shader"].as_string()
-        fragment_shader = inputs["fragment_shader"].as_string()
+        vertex_shader = inputs["vertex_shader"] if type(inputs["vertex_shader"]) == str else inputs["vertex_shader"].as_string()
+        fragment_shader = inputs["fragment_shader"] if type(inputs["fragment_shader"]) == str else inputs["fragment_shader"].as_string()
 
         new_width = self.ImageSaveWidth
         new_height = self.ImageSaveHeight
@@ -330,19 +330,33 @@ class GlslCodeRenderNode(OmniNode):
     def saveImage(self):
         cls = []
         taskList: list = self["fatherTree"].GlslTaskList
+
         saveImageName = self.ImageSaveName
         saveImageWidth = self.ImageSaveWidth
         saveImageHeight = self.ImageSaveHeight
+
         saveImage = bpy.data.images.get(saveImageName)
-        if (not saveImage) or (saveImageWidth, saveImageHeight) != saveImage.size[:]:
+
+        # 如果存在但尺寸不对 → 删除
+        if saveImage and (saveImageWidth, saveImageHeight) != saveImage.size[:]:
             bpy.data.images.remove(saveImage)
+            saveImage = None
+
+        # 如果不存在 → 创建
+        if not saveImage:
             bpy.ops.image.new(
-                name=saveImageName, width=saveImageWidth, height=saveImageHeight,
-                color=(0, 0, 0, 1), alpha=True)
+                name=saveImageName,
+                width=saveImageWidth,
+                height=saveImageHeight,
+                color=(0, 0, 0, 1),
+                alpha=True
+            )
             saveImage = bpy.data.images[saveImageName]
+
         cls.append(
-            GlRenderTask(self.readPixelsSave2Image,
-                         saveImage))
+            GlRenderTask(self.readPixelsSave2Image, saveImage)
+        )
+
         taskList.extend(cls)
 
     def process(self):
@@ -417,6 +431,53 @@ class GlslSimpleScreen(OmniNode):
         ], dtype=np.uint32)
         pool[self.name].outputs["vertex"] = vertices
         pool[self.name].outputs["indices"] = indices
+
+class DebugShader(OmniNode):
+    bl_label = "DebugShader"
+    bl_idname = "HO_OmniNode_GlslDebugShader"
+
+    def init(self, context):
+        super().init(context)
+        self.outputs.new(OmniNodeSocketText.__name__,
+                         name="顶点shader",
+                         identifier="vertex_shader")
+        self.outputs.new(OmniNodeSocketText.__name__,
+                         name="片元shader",
+                         identifier="fragment_shader")
+        self["fatherTree"].doing_initNode = False  # 更新树状态-新建节点结束
+
+    def process(self):
+        super().process()
+        # pool中的数据,使用socket的identifier查找
+        pool = self["fatherTree"].pool
+        vertex_shader = """
+        #version 330 core
+        layout (location = 0) in vec3 aPos;
+        out vec3 worldPos; //输出世界坐标
+
+        uniform mat4 model;
+        uniform mat4 view;
+        uniform mat4 projection;
+
+        void main()
+        {
+        gl_Position = projection * view * model * vec4(aPos, 1.0);
+        worldPos = vec3(model * vec4(aPos, 1.0)); 
+        }
+        """
+        fragment_shader = """
+        #version 330 core
+        in vec3 worldPos;//传入世界坐标
+        out vec4 FragColor;
+        void main()
+        {
+        //FragColor = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        FragColor = vec4(worldPos.x, worldPos.y, worldPos.z, 1.0);// 坐标颜色
+        }
+        """
+
+        pool[self.name].outputs["vertex_shader"] = vertex_shader
+        pool[self.name].outputs["fragment_shader"] = fragment_shader
 
 
 class GlslSimpleCube(OmniNode):
@@ -821,4 +882,5 @@ cls = [GlslCodeRenderNode,
        GlslSimpleCube,
        GlslSimpleMVPgenerator,
        DebugTreeGlslThread,
-       DebugFullSimpleCube]
+       DebugFullSimpleCube,
+       DebugShader]
